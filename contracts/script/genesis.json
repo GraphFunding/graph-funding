@@ -1,0 +1,42 @@
+{
+  "branches": [
+    {
+      "name": "Core protocol",
+      "weight": 4000,
+      "leaves": [
+        { "name": "Protocol Guild", "recipient": "0x4ea88fa76848a8bbab72613d4171df1ebcf68399", "weight": 5500 },
+        { "name": "Lighthouse", "recipient": "0x25c4a76e7d118705e7ea2e9b7d8c59930d8acd3b", "weight": 1500 },
+        { "name": "Nimbus", "recipient": "0x70e47c843e0f6ab0991a3189c28f2957eb6d3842", "weight": 1500 },
+        { "name": "Lodestar", "recipient": "0xb4da52336092db22fe8e036866d59c6488604f89", "weight": 1500 }
+      ]
+    },
+    {
+      "name": "Privacy",
+      "weight": 2000,
+      "leaves": [
+        { "name": "Tor Project", "recipient": "0x532fb5d00f40ced99b16d1e295c77cda2eb1bb4f", "weight": 3400 },
+        { "name": "Web3Privacy Now", "recipient": "0xb8fbd9a43cc0ceb3d9ddd58b752979a77e6f0c1d", "weight": 3300 },
+        { "name": "Whonix", "recipient": "0xf9d352e30de38ed1173854a241074414cea19555", "weight": 3300 }
+      ]
+    },
+    {
+      "name": "Security",
+      "weight": 2000,
+      "leaves": [
+        { "name": "Revoke.cash", "recipient": "0xfcbf17200c64e860f6639aa12b525015d115f863", "weight": 3400 },
+        { "name": "SEAL 911", "recipient": "0xba5ed9942ea64e8d789187e0af6a0390d78ba5ed", "weight": 3300 },
+        { "name": "DeFiHackLabs", "recipient": "0xd7d6215b4ef4b9b5f40baea48f41047eb67a11d5", "weight": 3300 }
+      ]
+    },
+    {
+      "name": "Open tooling & data",
+      "weight": 2000,
+      "leaves": [
+        { "name": "L2BEAT", "recipient": "0x41626ba92c0c2a1ad38fc83920300434082b1870", "weight": 2500 },
+        { "name": "growthepie", "recipient": "0x9438b8b447179740cd97869997a2fcc9b4aa63a2", "weight": 2500 },
+        { "name": "Otterscan", "recipient": "0x35d1a101e55da0c641e9379f2e4dfa3e2ae7f37b", "weight": 2500 },
+        { "name": "rotki", "recipient": "0x9531c059098e3d194ff87febb587ab07b30b1306", "weight": 2500 }
+      ]
+    }
+  ]
+}
