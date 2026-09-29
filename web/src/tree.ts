@@ -238,9 +238,12 @@ export function renderTree(svg: SVGSVGElement, tip: HTMLElement, state: GraphSta
       w.textContent = pct(p.node.weight)
       if (p.hot) {
         // clímax: el Keeper de este proyecto enciende su farol cuando el camino termina de dibujarse
+        // si es la hoja más baja de su rama, el Keeper va debajo: encima taparía las etiquetas de sus hermanas
         const kx = p.at.x + (rightSide ? -6 : 6)
-        el('image', { href: '/assets/keeper-lit.webp', x: kx - 24, y: p.at.y - 118, width: 48, height: 108 }, gClimax)
-        const cl = el('text', { x: kx, y: p.at.y - 128, 'text-anchor': 'middle', class: 'climax-label halo' }, gClimax)
+        const below = placed.every((q) => q.parent !== p.parent || q.at.y <= p.at.y)
+        const ky = below ? p.at.y + 24 : p.at.y - 118
+        el('image', { href: '/assets/keeper-lit.webp', x: kx - 24, y: ky, width: 48, height: 108 }, gClimax)
+        const cl = el('text', { x: kx, y: below ? ky + 128 : ky - 10, 'text-anchor': 'middle', class: 'climax-label halo' }, gClimax)
         cl.textContent = `${p.node.name.toUpperCase()} · ${(p.share * 100).toFixed(0)}% OF ALL MONEY`
       }
     }

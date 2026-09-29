@@ -8,6 +8,8 @@ exact scripts used for the site and the X kit:
   (gpt_image_2 through the Higgsfield CLI, with the chosen direction as the style reference).
 - `process_assets.py`, `export_assets.py`: curation (lanterns recolored to ink except one, paper to alpha, dotted empty
   seats, ink grain, torn paper mask) and export to `web/public/assets`.
+- `readme_shots.py`, `readme_export.py`: the README images, captured from the site itself, and the header
+  (`brand/readme-header.html`, also the repo's social preview).
 
 Models only generate the world; every letter on the site and the kit is HTML with real fonts (`brand/banner.html`,
 `brand/post.html`).
