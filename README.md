@@ -158,8 +158,8 @@ Addresses go here, and on the site, the moment they are deployed.
 - [x] Contracts: staking, the tree, epochs, payouts, proposals, badges
 - [x] Unit and fuzz tests, plus a worst-case gas test
 - [x] Site live at [graphfunding.app](https://graphfunding.app)
-- [ ] Mainnet-fork test against Stockereum (launch → trades → fees → leaves)
-- [ ] Deploy scripts and the keeper bot
+- [x] Mainnet-fork test against the real Stockereum (launch → trades → fees → leaves)
+- [x] Deploy and genesis scripts, the keeper bot and CI
 - [ ] Deploy the contracts and launch $GRAPHFUND
 - [ ] First epoch, then one every six hours
 - [ ] Owner renounces after 28 clean epochs
@@ -170,8 +170,10 @@ Addresses go here, and on the site, the moment they are deployed.
 
 ```text
 contracts/src/        GraphFund, KeeperStaking, KeeperBadge
-contracts/test/       unit, fuzz and worst-case gas tests
-contracts/script/     genesis.json: the starting tree
+contracts/test/       unit, fuzz, worst-case gas and mainnet-fork tests
+contracts/script/     Deploy, Genesis and genesis.json: the starting tree
+ops/keeper/           the keeper bot: calls draw() and advance() on time
+.github/workflows/    contract tests on every push + the keeper, every 15 minutes
 web/                  graphfunding.app (Vite + TypeScript + viem)
 brand/                the X kit, the README header and the image pipeline
 docs/recipients.md    where every recipient address comes from
@@ -183,9 +185,22 @@ docs/recipients.md    where every recipient address comes from
 cd contracts
 forge test                                                              # unit + fuzz
 FOUNDRY_PROFILE=gas forge test --match-contract GraphFundFixesTest -vv  # worst-case gas, isolated
+MAINNET_RPC_URL=<rpc> forge test --match-contract StockereumForkTest -vv # the real Stockereum, on a fork
 
 cd ../web
 npm install && npm run dev                                              # the site
+```
+
+### Keep the epochs moving
+
+Nobody has to be trusted to move the money: `draw()` and `advance()` are open to anyone. This repo runs a small bot
+on GitHub Actions every 15 minutes ([ops/keeper](ops/keeper/keeper.mjs)); its wallet only pays gas. Anyone can run
+another one:
+
+```bash
+cd ops/keeper && npm install
+RPC_URL=<rpc> GRAPHFUND_ADDRESS=<GraphFund> DRY_RUN=1 node keeper.mjs   # prints what it would do; drop DRY_RUN and
+                                                                        # set KEEPER_PRIVATE_KEY to send it
 ```
 
 ## Images

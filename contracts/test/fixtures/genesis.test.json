@@ -1,0 +1,19 @@
+{
+  "branches": [
+    {
+      "name": "Core",
+      "weight": 6000,
+      "leaves": [
+        { "name": "Beef", "recipient": "0x000000000000000000000000000000000000beef", "weight": 7000 },
+        { "name": "Cafe", "recipient": "0x000000000000000000000000000000000000cafe", "weight": 3000 }
+      ]
+    },
+    {
+      "name": "Tools",
+      "weight": 4000,
+      "leaves": [
+        { "name": "Dead", "recipient": "0x000000000000000000000000000000000000dead", "weight": 10000 }
+      ]
+    }
+  ]
+}
