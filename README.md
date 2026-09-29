@@ -43,7 +43,8 @@ small committee drawn at random decides how the money splits. Nobody ever votes 
 1. **Enlist.** Lock at least 100,000 $GRAPHFUND. Your chance of being drawn is your share of everything locked.
 2. **Drawn.** The hash of a future block picks five Keepers for every fork. Nobody knows who in advance.
 3. **Vote.** Each Keeper proposes how the money below their fork should split. The **median** wins, so one bad vote
-   moves nothing. Voting mints a soulbound Keeper badge.
+   moves nothing, and no share moves more than **5 points per epoch**, so no single committee can hijack a fork.
+   Voting mints a soulbound Keeper badge.
 4. **Flow.** Every six hours the epoch closes and the money climbs down the tree. Keepers who voted on a fork share 2%
    of what flowed through it.
 
@@ -54,7 +55,7 @@ small committee drawn at random decides how the money splits. Nobody ever votes 
 ```mermaid
 flowchart LR
     D["draw()<br/>five Keepers per fork,<br/>weighted by stake"] --> V["vote()<br/>each Keeper sends a split<br/>and gets a soulbound badge"]
-    V --> A["advance()<br/>median per fork, money moves down,<br/>2% to the voters, next draw requested"]
+    V --> A["advance()<br/>median per fork (max 5 pts a move),<br/>money moves down, 2% to the voters,<br/>next draw requested"]
     A -- "6 hours later" --> D
 
     classDef step fill:#f3ebdd,stroke:#2b59c3,stroke-width:2px,color:#2b59c3
@@ -83,7 +84,8 @@ escrow **straight into this contract**. Every claim is public on Etherscan. Anyo
 
 <p align="center"><img src="docs/readme/genesis-tree.jpg" alt="The genesis tree: four branches and fourteen recipients" width="100%" /></p>
 
-The starting weights, before any committee has voted. From the first epoch on, the committees decide.
+The starting weights, before any committee has voted. From the first epoch on, the committees decide, 5 points per
+epoch at most.
 
 <table>
   <tr><th align="left">Branch</th><th align="left">Recipient</th><th align="right">Inside the branch</th><th align="right">Of every ETH¹</th></tr>
@@ -111,7 +113,8 @@ The starting weights, before any committee has voted. From the first epoch on, t
 > lives in [contracts/script/genesis.json](contracts/script/genesis.json).
 
 **New projects can join.** Anyone can propose a project under a branch with a deposit of 1,000,000 $GRAPHFUND. It
-enters at 0% and only gets money if a committee gives it weight; the deposit comes back the first time it does.
+enters at 0%, gains at most 5 points per epoch, and only gets money if a committee gives it weight; the deposit comes
+back the first time it does.
 
 <br />
 
@@ -119,7 +122,7 @@ enters at 0% and only gets money if a committee gives it weight; the deposit com
 
 | | Can | Cannot |
 |---|---|---|
-| **Keepers** | Lock and unlock $GRAPHFUND, vote on the fork they were drawn for | Unlock while sitting on a committee |
+| **Keepers** | Lock $GRAPHFUND, vote on the fork they were drawn for, leave the draw and unlock | Unlock while sitting on a committee |
 | **Anyone** | Call `draw()` and `advance()`, send ETH, propose a project, trigger `payout` for a recipient | Choose who gets drawn |
 | **Owner** *(until renounced)* | Edit the tree and the starting weights, change parameters within fixed bounds, reject spam proposals | Touch anyone's stake, touch money owed to a project, choose who gets drawn |
 
@@ -132,7 +135,7 @@ The owner renounces after **28 epochs (7 days)** with committees drawn and no em
 | Contract | What it does |
 |---|---|
 | [`GraphFund`](contracts/src/GraphFund.sol) | The tree, the epochs (`draw` → `vote` → `advance`), the payouts (ETH, or WETH to contracts that refuse ETH) and the proposals |
-| [`KeeperStaking`](contracts/src/KeeperStaking.sol) | Lock $GRAPHFUND (minimum 100,000) to enter the draw. Stakes freeze for about a minute while a draw is pending (never more than ~1 day), and stay locked while you sit on a committee |
+| [`KeeperStaking`](contracts/src/KeeperStaking.sol) | Lock $GRAPHFUND (minimum 100,000) to enter the draw. Stakes can't change while a draw is pending (minutes; if nobody draws, anyone can end it with `draw()`), and stay locked while you sit on a committee. To exit: `leave()` takes you out of every future draw, then `unstake` as soon as your seat ends |
 | [`KeeperBadge`](contracts/src/KeeperBadge.sol) | One soulbound token per epoch you voted in |
 | $GRAPHFUND | 1,000,000,000 fixed supply, launched on Stockereum |
 
@@ -143,9 +146,11 @@ Addresses go here, and on the site, the moment they are deployed.
 ## Honest limits
 
 - ⚖️ **Stake buys seats.** Seats are drawn in proportion to what is locked: whoever locks most of the supply wins most
-  seats. The median protects a fork's split only while no one holds three of its five seats. Every seat and every vote
-  is public.
-- 🎲 **Randomness is a future blockhash.** The proposer of that block can bias it by withholding the block.
+  seats. The median protects a fork's split only while no one holds three of its five seats, and even a captured
+  committee moves each share at most 5 points per epoch. Every seat and every vote is public.
+- 🎲 **Randomness is a future blockhash.** Whoever builds that block (a role that can be bought for a single slot) can
+  grind its hash and pick a committee. The 5-point cap is the answer: capturing one committee pays little, and honest
+  committees undo it at the same speed. Verifiable randomness (e.g. a VRF) would close it for good.
 - 🔑 **The fee claim depends on the creator wallet.** Claims into the contract are public, but someone has to make them.
 - ⛽ **One transaction draws every committee.** Parameters are bounded (`committeeSize × maxNodes/2 ≤ 120`) so the worst
   case stays well under Ethereum's per-transaction gas cap.

@@ -13,7 +13,7 @@ import { config, deployed } from './config'
 
 export const fundAbi = parseAbi([
   'struct Node { uint32 parent; uint8 depth; bool active; bool pending; bool everFunded; bool bondSettled; uint8 zeroStreak; address recipient; address proposer; uint256 bond; string name; }',
-  'struct Params { uint64 epochLength; uint8 committeeSize; uint16 voterPayBps; uint8 drawDelay; uint8 maxChildren; uint8 maxDepth; uint16 maxNodes; uint8 pruneAfter; uint256 proposalBond; }',
+  'struct Params { uint64 epochLength; uint8 committeeSize; uint16 voterPayBps; uint8 drawDelay; uint8 maxChildren; uint8 maxDepth; uint16 maxNodes; uint8 pruneAfter; uint256 proposalBond; uint16 maxShiftBps; }',
   'function nodeCount() view returns (uint256)',
   'function getNode(uint32 id) view returns (Node)',
   'function getChildren(uint32 id) view returns (uint32[] ids, uint16[] weights)',
@@ -48,6 +48,8 @@ export const stakingAbi = parseAbi([
   'function minStake() view returns (uint256)',
   'function stake(uint256 amount)',
   'function unstake(uint256 amount)',
+  'function leave()',
+  'function leaving(address) view returns (bool)',
 ])
 
 export const erc20Abi = parseAbi([
@@ -83,6 +85,7 @@ export type GraphState = {
   pool: bigint
   totalOwed: bigint
   totalStaked: bigint
+  totalWeight: bigint
   keepers: number
   harvestable: bigint
   tree: TreeNode
@@ -120,6 +123,7 @@ const emptyState = (): GraphState => ({
   pool: 0n,
   totalOwed: 0n,
   totalStaked: 0n,
+  totalWeight: 0n,
   keepers: 0,
   harvestable: 0n,
   tree: genesisTree(),
@@ -129,7 +133,7 @@ export async function readState(): Promise<GraphState> {
   if (!deployed()) return emptyState()
   const fund = { address: config.graphFund as Address, abi: fundAbi }
   const staking = { address: config.staking as Address, abi: stakingAbi }
-  const [epoch, nextAt, pending, seed, pool, totalOwed, totalStaked, slots] = await Promise.all([
+  const [epoch, nextAt, pending, seed, pool, totalOwed, totalStaked, totalWeight, slots] = await Promise.all([
     publicClient.readContract({ ...fund, functionName: 'epoch' }),
     publicClient.readContract({ ...fund, functionName: 'nextAdvanceAt' }),
     publicClient.readContract({ ...fund, functionName: 'drawPending' }),
@@ -137,6 +141,7 @@ export async function readState(): Promise<GraphState> {
     publicClient.readContract({ ...fund, functionName: 'pool' }),
     publicClient.readContract({ ...fund, functionName: 'totalOwed' }),
     publicClient.readContract({ ...staking, functionName: 'totalStaked' }),
+    publicClient.readContract({ ...staking, functionName: 'totalWeight' }),
     publicClient.readContract({ ...staking, functionName: 'slots' }),
   ])
   const harvestable = config.creator
@@ -182,6 +187,7 @@ export async function readState(): Promise<GraphState> {
     pool,
     totalOwed,
     totalStaked,
+    totalWeight,
     keepers: Number(slots),
     harvestable,
     tree: await build(0, 10_000),
@@ -230,6 +236,8 @@ export const actions = {
   },
   unstake: (w: Wallet, amount: bigint) =>
     send(w, { address: config.staking as Address, abi: stakingAbi, functionName: 'unstake', args: [amount] } as never),
+  // Step one of leaving: out of every future draw. Unstake once your seat (if any) ends, even mid-draw.
+  leave: (w: Wallet) => send(w, { address: config.staking as Address, abi: stakingAbi, functionName: 'leave' } as never),
   vote: (w: Wallet, node: number, bps: number[]) =>
     send(w, { address: config.graphFund as Address, abi: fundAbi, functionName: 'vote', args: [node, bps] } as never),
   async propose(w: Wallet, parent: number, recipient: Address, name: string, bond: bigint) {
@@ -249,13 +257,14 @@ export async function keeperView(account: Address, epoch: number, branchIds: num
   if (!deployed()) return null
   const staking = { address: config.staking as Address, abi: stakingAbi }
   const fund = { address: config.graphFund as Address, abi: fundAbi }
-  const [stake, weight, balance, locked] = await Promise.all([
+  const [stake, weight, balance, locked, leaving] = await Promise.all([
     publicClient.readContract({ ...staking, functionName: 'stakeOf', args: [account] }),
     publicClient.readContract({ ...staking, functionName: 'weightOf', args: [account] }),
     config.token
       ? publicClient.readContract({ address: config.token as Address, abi: erc20Abi, functionName: 'balanceOf', args: [account] })
       : Promise.resolve(0n),
     publicClient.readContract({ ...staking, functionName: 'lockedEpoch', args: [account] }),
+    publicClient.readContract({ ...staking, functionName: 'leaving', args: [account] }),
   ])
   const drawnFor: number[] = []
   if (epoch > 0) {
@@ -264,5 +273,5 @@ export async function keeperView(account: Address, epoch: number, branchIds: num
     )
     flags.forEach((f, i) => f && drawnFor.push(branchIds[i]))
   }
-  return { stake, weight, balance, locked: Number(locked), drawnFor }
+  return { stake, weight, balance, locked: Number(locked), leaving, drawnFor }
 }

@@ -242,17 +242,19 @@ contract GraphFundFixesTest is Base {
         address keeperX = makeAddr("keeperX");
         address eve = makeAddr("eve");
 
-        uint32 a = _leaf(0, "A", alice);
-        uint32 b = _leaf(0, "B", bob);
+        // Proposals go under a branch, never straight under the root: the fork under test is X.
+        uint32 x = _branch(0, "X");
+        uint32 a = _leaf(x, "A", alice);
+        uint32 b = _leaf(x, "B", bob);
 
         uint256 bondAmt = fund.getParams().proposalBond;
         gf.mint(carol, bondAmt);
         vm.startPrank(carol);
         gf.approve(address(fund), bondAmt);
-        uint32 p = fund.propose(0, dave, "P");
+        uint32 p = fund.propose(x, dave, "P");
         vm.stopPrank();
 
-        (uint32[] memory ids0, uint16[] memory w0) = fund.getChildren(0);
+        (uint32[] memory ids0, uint16[] memory w0) = fund.getChildren(x);
         assertEq(ids0.length, 3);
         assertEq(w0[0], 10_000);
         assertEq(w0[1], 0);
@@ -262,31 +264,37 @@ contract GraphFundFixesTest is Base {
 
         GraphFund.Params memory params = fund.getParams();
         params.committeeSize = 1;
+        params.maxShiftBps = 10_000; // this test checks the exact median of the surviving votes
         _setParams(params);
 
         _start();
-        // Advance 4 epochs with no votes: P's weight stays 0 every time, so its zeroStreak reaches
-        // pruneAfter (4) without ever being funded.
-        for (uint256 i; i < 4; i++) _nextEpoch();
+        // 4 epochs in which X's committee (keeperX) votes everything to A: P's weight stays 0 with a voting
+        // committee every time, so its zeroStreak reaches pruneAfter (4) without ever being funded.
+        for (uint256 i; i < 4; i++) {
+            _draw();
+            vm.prank(keeperX);
+            fund.vote(x, _w3(10_000, 0, 0));
+            _nextEpoch();
+        }
         assertEq(fund.getNode(p).zeroStreak, 4);
         assertFalse(fund.getNode(p).everFunded);
 
         _draw();
-        address[] memory committee = fund.getCommittee(fund.epoch(), 0);
+        address[] memory committee = fund.getCommittee(fund.epoch(), x);
         assertEq(committee.length, 1);
         vm.prank(committee[0]);
-        fund.vote(0, _w3(2000, 8000, 0));
+        fund.vote(x, _w3(2000, 8000, 0));
 
         vm.prank(eve);
         fund.prune(p);
 
         // P is gone before the votes are tallied.
-        (uint32[] memory idsAfterPrune,) = fund.getChildren(0);
+        (uint32[] memory idsAfterPrune,) = fund.getChildren(x);
         assertEq(idsAfterPrune.length, 2);
 
         _nextEpoch();
 
-        (uint32[] memory ids, uint16[] memory w) = fund.getChildren(0);
+        (uint32[] memory ids, uint16[] memory w) = fund.getChildren(x);
         assertEq(ids.length, 2);
         bool sawA;
         bool sawB;
@@ -309,20 +317,22 @@ contract GraphFundFixesTest is Base {
     function test_reject_refundsFundedProposal() public {
         address carol = makeAddr("carol");
         address dave = makeAddr("dave");
+        uint32 x = _branch(0, "X");
         uint256 bondAmt = fund.getParams().proposalBond;
         gf.mint(carol, bondAmt);
         vm.startPrank(carol);
         gf.approve(address(fund), bondAmt);
-        uint32 p = fund.propose(0, dave, "P");
+        uint32 p = fund.propose(x, dave, "P");
         vm.stopPrank();
 
-        // P is root's only child: first-child-takes-all gives it weight 10_000 immediately.
-        (, uint16[] memory w) = fund.getChildren(0);
+        // P is X's only child: first-child-takes-all gives it weight 10_000 immediately.
+        (, uint16[] memory w) = fund.getChildren(x);
         assertEq(w[0], 10_000);
 
         _start();
         _nextEpoch(); // _updateStreaks sees weight != 0 -> everFunded = true
         assertTrue(fund.getNode(p).everFunded);
+        _draw(); // rejecting waits until the pending draw is done
 
         uint256 balBefore = gf.balanceOf(carol);
         uint256 deadBefore = gf.balanceOf(fund.DEAD());
@@ -343,12 +353,13 @@ contract GraphFundFixesTest is Base {
         gf.mint(carol, bondAmt);
         vm.startPrank(carol);
         gf.approve(address(fund), bondAmt);
-        // Owner-added leaf E takes the root weight first, so the proposal P starts at weight 0 and is
+        // Owner-added leaf E takes X's weight first, so the proposal P starts at weight 0 and is
         // never funded.
         vm.stopPrank();
-        _leaf(0, "E", eve);
+        uint32 x = _branch(0, "X");
+        _leaf(x, "E", eve);
         vm.startPrank(carol);
-        uint32 p = fund.propose(0, dave, "P");
+        uint32 p = fund.propose(x, dave, "P");
         vm.stopPrank();
         assertFalse(fund.getNode(p).everFunded);
 
@@ -371,6 +382,7 @@ contract GraphFundFixesTest is Base {
 
         uint32 x = _branch(0, "X");
         _start();
+        _draw(); // tree edits wait until the pending draw is done
 
         uint256 bondAmt = fund.getParams().proposalBond;
         gf.mint(carol, bondAmt);

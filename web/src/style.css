@@ -230,6 +230,7 @@ main { position: relative; }
 .input-suffix em { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); font: 900 20px/1 var(--display); font-style: normal; color: var(--ink); letter-spacing: 0.04em; }
 .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .btn-row .btn { justify-content: center; }
+.btn-row [data-act="leave"] { grid-column: 1 / -1; }
 .drawn { border: 2px solid var(--ink); padding: 18px; }
 .drawn[hidden] { display: none; }
 .drawn h3 { font-size: 64px; margin-bottom: 14px; }

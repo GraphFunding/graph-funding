@@ -90,6 +90,32 @@
   },
   {
     "type": "function",
+    "name": "leave",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "leaving",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "lock",
     "inputs": [
       {
@@ -437,6 +463,19 @@
   },
   {
     "type": "event",
+    "name": "Leaving",
+    "inputs": [
+      {
+        "name": "keeper",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "MinStakeSet",
     "inputs": [
       {
@@ -551,6 +590,11 @@
   },
   {
     "type": "error",
+    "name": "AlreadyLeaving",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "AlreadySet",
     "inputs": []
   },
@@ -572,6 +616,11 @@
   {
     "type": "error",
     "name": "Locked",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoStake",
     "inputs": []
   },
   {

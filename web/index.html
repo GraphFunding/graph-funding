@@ -163,7 +163,7 @@
           <li>
             <span class="n riso">3</span><h3 class="riso">Vote</h3>
             <img src="/assets/step-vote.webp" alt="" loading="lazy" />
-            <p>Each one proposes the split below their fork. The median wins, so one bad vote moves nothing.</p>
+            <p>Each one proposes the split below their fork. The median wins, and no share moves more than five points an epoch.</p>
           </li>
           <li>
             <span class="n riso">4</span><h3 class="riso">Flow</h3>
@@ -200,7 +200,9 @@
             <div class="btn-row">
               <button type="button" class="btn btn-orange" data-act="stake">Stake</button>
               <button type="button" class="btn btn-outline" data-act="unstake">Unstake</button>
+              <button type="button" class="btn btn-outline" data-act="leave">Leave the draw</button>
             </div>
+            <p class="small">Leaving takes you out of every future draw; unstake once your seat ends, even while a draw is pending.</p>
             <div class="drawn" data-me="drawn">
               <p class="kicker">You were drawn for</p>
               <h3 class="riso" data-me="drawn-name">Core protocol</h3>
@@ -274,13 +276,13 @@
             <h3>4 · Before you lock</h3>
             <dl class="faq">
               <dt>Can a whale buy a committee?</dt>
-              <dd>Seats are drawn in proportion to what is locked, so whoever locks most of the $GRAPHFUND wins most seats. The median protects a fork's split only while no one holds three of its five seats. Every seat and every vote is public.</dd>
+              <dd>Seats are drawn in proportion to what is locked, so whoever locks most of the $GRAPHFUND wins most seats. The median protects a fork's split only while no one holds three of its five seats, and even a full committee can move a share at most five points per epoch. Every seat and every vote is public.</dd>
               <dt>Keepers keep 2% of what?</dt>
               <dd>Each epoch, the Keepers who voted on a fork share 2% of the ETH that flowed through that fork. The other 98% keeps climbing down the tree.</dd>
               <dt>Did these projects sign up?</dt>
               <dd>No. They are recipients, not partners. Graph Funding pays the donation address each project publishes; none of them has endorsed it.</dd>
               <dt>Is it audited?</dt>
-              <dd>Not yet. The code is open source and tested. The draw uses the hash of a future block, which that block's proposer could bias.</dd>
+              <dd>Not yet. The code is open source and tested. The draw uses the hash of a future block, and whoever builds that block could bias it. That is why no share can move more than five points an epoch: capturing one committee pays little and is undone at the same speed.</dd>
             </dl>
           </div>
           <svg class="stamp" viewBox="0 0 200 200" aria-hidden="true">

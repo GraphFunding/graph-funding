@@ -3,10 +3,11 @@ pragma solidity 0.8.26;
 
 import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 /// @title Keeper badge
 /// @notice One soulbound token per epoch in which a keeper voted (id = epoch).
-contract KeeperBadge is ERC1155, Ownable {
+contract KeeperBadge is ERC1155, Ownable2Step {
     error Soulbound();
     error NotMinter();
     error AlreadySet();

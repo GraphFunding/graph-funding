@@ -119,6 +119,7 @@ contract GraphFundTreeTest is Base {
     function test_addAfterStart_isPendingUntilAdvance() public {
         _leaf(0, "A", alice);
         _start();
+        _draw(); // tree edits wait until the pending draw is done
         uint32 b = _leaf(0, "B", bob);
         assertTrue(fund.getNode(b).pending);
         (uint32[] memory ids,) = fund.getChildren(0);

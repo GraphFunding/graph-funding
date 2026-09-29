@@ -5,6 +5,8 @@ interface IKeeperStaking {
     function token() external view returns (address);
     function totalWeight() external view returns (uint256);
     function drawOne(uint256 rand) external view returns (address);
+    function drawPendingSince() external view returns (uint256);
+    function FREEZE_MAX() external view returns (uint256);
     function setDrawPending(bool pending) external;
     function lock(address keeper, uint256 epoch) external;
 }

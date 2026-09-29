@@ -23,6 +23,10 @@ contract GraphFundEpochsTest is Base {
             keepers[i] = makeAddr(string(abi.encodePacked("keeper", vm.toString(i))));
             _stake(keepers[i], 1_000_000e18);
         }
+        // These tests check median/split semantics: lift the per-epoch shift cap.
+        GraphFund.Params memory p = fund.getParams();
+        p.maxShiftBps = 10_000;
+        _setParams(p);
     }
 
     function _committeeSize(uint8 k) internal {

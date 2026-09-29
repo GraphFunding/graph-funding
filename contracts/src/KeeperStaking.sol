@@ -10,6 +10,9 @@ import {IEpochSource} from "./interfaces/IEpochSource.sol";
 /// @title Keeper staking
 /// @notice Lock $GRAPHFUND to enter the draw for Graph Funding committees. The chance of being drawn is
 ///         proportional to the stake. Stakes below `minStake` stay locked but carry no weight.
+/// @dev Exit in two steps: `leave()` (outside the draw freeze, even while locked) drops the account's draw weight to
+///      0, and a zero-weight stake can `unstake` at any time, freeze or not, once its lock is over. A stake with no
+///      weight cannot change any draw, so moving it while a seed is known does not reopen the freeze.
 contract KeeperStaking is Ownable2Step {
     using SafeERC20 for IERC20;
 
@@ -24,6 +27,8 @@ contract KeeperStaking is Ownable2Step {
     error StakersExist();
     error NoWeight();
     error BelowMinStake();
+    error NoStake();
+    error AlreadyLeaving();
 
     event TokenSet(address indexed token);
     event GraphFundSet(address indexed graphFund);
@@ -32,6 +37,7 @@ contract KeeperStaking is Ownable2Step {
     event Unstaked(address indexed keeper, uint256 amount, uint256 stake);
     event DrawPendingSet(bool pending);
     event KeeperLocked(address indexed keeper, uint256 epoch);
+    event Leaving(address indexed keeper);
 
     IERC20 public token;
     address public graphFund;
@@ -44,6 +50,8 @@ contract KeeperStaking is Ownable2Step {
     mapping(address => uint256) public lockedEpoch;
     mapping(address => uint256) public slotOf;
     mapping(uint256 => address) public slotOwner;
+    /// @notice True between `leave()` and a full unstake (or a new `stake`): the account has no draw weight.
+    mapping(address => bool) public leaving;
     uint256 public slots;
     uint256 public totalWeight;
     uint256 public totalStaked;
@@ -83,10 +91,11 @@ contract KeeperStaking is Ownable2Step {
 
     // ---------------------------------------------------------------- keepers
 
+    /// @notice Staking while leaving cancels the exit: the whole new stake gets its draw weight back.
     function stake(uint256 amount) external {
         if (address(token) == address(0)) revert TokenNotSet();
         if (amount == 0) revert ZeroAmount();
-        if (drawPending && block.number < drawPendingSince + FREEZE_MAX) revert DrawIsPending();
+        if (_frozen()) revert DrawIsPending();
         uint256 before = stakeOf[msg.sender];
         uint256 afterStake = before + amount;
         if (afterStake < minStake) revert BelowMinStake();
@@ -94,28 +103,53 @@ contract KeeperStaking is Ownable2Step {
         if (slot == 0) slot = _append(msg.sender);
         stakeOf[msg.sender] = afterStake;
         totalStaked += amount;
-        _reweight(slot, _weight(before), _weight(afterStake));
+        if (leaving[msg.sender]) {
+            leaving[msg.sender] = false;
+            _reweight(slot, 0, _weight(afterStake));
+        } else {
+            _reweight(slot, _weight(before), _weight(afterStake));
+        }
         emit Staked(msg.sender, amount, afterStake);
         token.safeTransferFrom(msg.sender, address(this), amount);
     }
 
+    /// @notice First step of the exit. Drops the caller's draw weight to 0 so no future draw can pick it. Allowed
+    ///         whenever `stake` is (outside the draw freeze), even while locked. A keeper already on the current
+    ///         committee stays a member (votes, is paid) and stays locked until the epoch ends; after that it can
+    ///         `unstake` at any time, freeze or not.
+    function leave() external {
+        if (_frozen()) revert DrawIsPending();
+        uint256 s = stakeOf[msg.sender];
+        if (s == 0) revert NoStake();
+        if (leaving[msg.sender]) revert AlreadyLeaving();
+        leaving[msg.sender] = true;
+        _reweight(slotOf[msg.sender], _weight(s), 0);
+        emit Leaving(msg.sender);
+    }
+
+    /// @notice The draw freeze only binds stakes that carry draw weight: a leaving account (or one below
+    ///         `minStake`) can unstake during it. The lock binds everyone.
     function unstake(uint256 amount) external {
         if (amount == 0) revert ZeroAmount();
-        if (drawPending && block.number < drawPendingSince + FREEZE_MAX) revert DrawIsPending();
+        bool isLeaving = leaving[msg.sender];
+        uint256 before = stakeOf[msg.sender];
+        uint256 oldW = isLeaving ? 0 : _weight(before);
+        if (oldW != 0 && _frozen()) revert DrawIsPending();
         uint256 le = lockedEpoch[msg.sender];
         if (le != 0 && le >= IEpochSource(graphFund).epoch()) revert Locked();
-        uint256 before = stakeOf[msg.sender];
         if (amount > before) revert InsufficientStake();
         uint256 afterStake = before - amount;
         stakeOf[msg.sender] = afterStake;
         totalStaked -= amount;
-        _reweight(slotOf[msg.sender], _weight(before), _weight(afterStake));
+        if (afterStake == 0 && isLeaving) leaving[msg.sender] = false;
+        _reweight(slotOf[msg.sender], oldW, isLeaving ? 0 : _weight(afterStake));
         token.safeTransfer(msg.sender, amount);
         emit Unstaked(msg.sender, amount, afterStake);
     }
 
+    /// @notice Draw weight: the stake if it clears `minStake` and the account is not leaving, else 0.
     function weightOf(address keeper) external view returns (uint256) {
-        return _weight(stakeOf[keeper]);
+        return leaving[keeper] ? 0 : _weight(stakeOf[keeper]);
     }
 
     // ---------------------------------------------------------------- graph fund hooks
@@ -138,6 +172,13 @@ contract KeeperStaking is Ownable2Step {
         uint256 tw = totalWeight;
         if (tw == 0) revert NoWeight();
         return slotOwner[_find(rand % tw)];
+    }
+
+    // ---------------------------------------------------------------- freeze
+
+    /// @dev Same condition for stake, leave and weighted unstakes: a draw is pending and the freeze has not expired.
+    function _frozen() internal view returns (bool) {
+        return drawPending && block.number < drawPendingSince + FREEZE_MAX;
     }
 
     // ---------------------------------------------------------------- fenwick

@@ -221,7 +221,9 @@ function paintTree() {
 
 function paintProposeParents() {
   const sel = $<HTMLSelectElement>('[data-in="parent"]')
+  // las propuestas cuelgan de una rama, nunca de la raíz (el contrato revierte BadParent)
   sel.innerHTML = branches(state.tree)
+    .filter((b) => b.id !== 0)
     .map((b) => `<option value="${b.id}">${b.name}</option>`)
     .join('')
 }
@@ -261,7 +263,7 @@ function sliderRows(node: TreeNode, disabled: boolean) {
 }
 
 async function paintMe() {
-  const writes = $$<HTMLButtonElement>('[data-act="stake"],[data-act="unstake"],[data-act="propose"],[data-act="vote"]')
+  const writes = $$<HTMLButtonElement>('[data-act="stake"],[data-act="unstake"],[data-act="leave"],[data-act="propose"],[data-act="vote"]')
   const ready = deployed() && !!config.token
   writes.forEach((b) => (b.disabled = !ready || !me))
   // SPECIMEN: antes del deploy el formulario muestra un ejemplar real con la rama más pesada del génesis
@@ -283,9 +285,11 @@ async function paintMe() {
   $<HTMLButtonElement>('[data-act="harvest"]').hidden = !(config.creator && me.account.toLowerCase() === config.creator.toLowerCase())
   const v = await keeperView(me.account, state.epoch, branches(state.tree).map((b) => b.id))
   if (!v) return
-  $('[data-me="stake"]').textContent = `${gf(v.stake)} GRAPHFUND`
+  $('[data-me="stake"]').textContent = `${gf(v.stake)} GRAPHFUND${v.leaving ? ' · leaving' : ''}`
+  $<HTMLButtonElement>('[data-act="leave"]').hidden = v.stake === 0n || v.leaving
   $('[data-me="balance"]').textContent = `${gf(v.balance)} GRAPHFUND`
-  const total = state.totalStaked
+  // la chance es sobre el peso del sorteo (stakes bajo el mínimo o saliendo no cuentan), no sobre todo lo bloqueado
+  const total = state.totalWeight
   $('[data-me="chance"]').textContent = total > 0n && v.weight > 0n ? `${((Number(v.weight) / Number(total)) * 100).toFixed(2)}%` : '0%'
   const drawn = $('[data-me="drawn"]')
   drawn.hidden = v.drawnFor.length === 0
@@ -319,6 +323,9 @@ $('[data-act="connect"]').addEventListener('click', () =>
 )
 $('[data-act="stake"]').addEventListener('click', () => me && act(() => actions.stake(me!, amountIn()), 'Approve and stake in your wallet…', 'Staked. You enter the next draw.'))
 $('[data-act="unstake"]').addEventListener('click', () => me && act(() => actions.unstake(me!, amountIn()), 'Confirm in your wallet…', 'Unstaked.'))
+$('[data-act="leave"]').addEventListener('click', () =>
+  me && act(() => actions.leave(me!), 'Confirm in your wallet…', 'You are out of the next draws. Unstake once your seat ends.'),
+)
 $('[data-act="vote"]').addEventListener('click', () => {
   if (!me) return
   const raw = $$<HTMLInputElement>('[data-slider]').map((s) => Number(s.value))

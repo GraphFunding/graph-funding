@@ -9,7 +9,7 @@ export const config = {
   badge: (env.VITE_BADGE || '') as `0x${string}` | '',
   token: (env.VITE_TOKEN || '') as `0x${string}` | '',
   creator: (env.VITE_CREATOR || '') as `0x${string}` | '',
-  github: env.VITE_GITHUB || '',
+  github: env.VITE_GITHUB || 'https://github.com/GraphFunding/graph-funding',
   x: env.VITE_X || 'https://x.com/GraphFunding',
   // Stockereum (verified on mainnet: factory.hook().escrow())
   weth: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' as const,

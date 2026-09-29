@@ -14,7 +14,8 @@ import {Median} from "./lib/Median.sol";
 /// @title Graph Funding
 /// @notice Snowmoon, chapter 17, on Ethereum. Fees flow down a tree of public goods. At every branch a
 ///         committee drawn at random from $GRAPHFUND stakers sets the weights of the children.
-/// @dev Unaudited. Randomness comes from the blockhash of a future block, which that block's proposer can bias.
+/// @dev Unaudited. Randomness comes from the blockhash of a future block, which the builder of that block can grind;
+///      `maxShiftBps` caps how far one committee can move any weight per epoch.
 contract GraphFund is Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -42,6 +43,7 @@ contract GraphFund is Ownable2Step, ReentrancyGuard {
         uint16 maxNodes;
         uint8 pruneAfter;
         uint256 proposalBond;
+        uint16 maxShiftBps; // max change of a child's weight per epoch (10_000 = no cap)
     }
 
     error BadNode();
@@ -66,6 +68,7 @@ contract GraphFund is Ownable2Step, ReentrancyGuard {
     error NotFunded();
     error BondSettled();
     error NotPrunable();
+    error DrawPending();
 
     event NodeAdded(uint32 indexed id, uint32 indexed parent, address recipient, address proposer, string name, bool pending);
     event NodeActivated(uint32 indexed id);
@@ -134,7 +137,8 @@ contract GraphFund is Ownable2Step, ReentrancyGuard {
             maxDepth: 4,
             maxNodes: 48,
             pruneAfter: 4,
-            proposalBond: 1_000_000e18
+            proposalBond: 1_000_000e18,
+            maxShiftBps: 500
         });
         _nodes.push();
         Node storage root = _nodes[0];
@@ -154,10 +158,12 @@ contract GraphFund is Ownable2Step, ReentrancyGuard {
     // ================================================================ owner: tree & params
 
     function addNode(uint32 parent, string calldata name, address recipient) external onlyOwner returns (uint32) {
+        if (drawPending) revert DrawPending();
         return _create(parent, name, recipient, address(0), 0);
     }
 
     function removeNode(uint32 id) external onlyOwner {
+        if (drawPending) revert DrawPending();
         if (id == 0 || id >= _nodes.length) revert BadNode();
         Node storage n = _nodes[id];
         if (!(n.active || n.pending)) revert BadNode();
@@ -176,11 +182,12 @@ contract GraphFund is Ownable2Step, ReentrancyGuard {
     }
 
     function setParams(Params calldata p) external onlyOwner {
+        if (drawPending) revert DrawPending();
         if (
             p.epochLength < 10 minutes || p.epochLength > 7 days || p.committeeSize == 0 || p.committeeSize > 9
                 || p.voterPayBps > 1_000 || p.drawDelay == 0 || p.drawDelay > 64 || p.maxChildren < 2
                 || p.maxChildren > 16 || p.maxDepth == 0 || p.maxDepth > 6 || p.maxNodes < liveNodes
-                || p.maxNodes > 128 || p.pruneAfter == 0
+                || p.maxNodes > 128 || p.pruneAfter == 0 || p.maxShiftBps < 100 || p.maxShiftBps > 10_000
         ) revert BadParams();
         if (uint256(p.epochLength) < uint256(p.drawDelay) * 12 + 1 hours) revert BadParams(); // voting window after the seed
         if (uint256(p.committeeSize) * (uint256(p.maxNodes) / 2) > 120) revert BadParams(); // keeps draw() far under the 16.78M tx gas cap
@@ -201,7 +208,10 @@ contract GraphFund is Ownable2Step, ReentrancyGuard {
     function draw() external {
         if (!drawPending) revert NoDrawPending();
         if (block.number <= seedBlock) revert TooEarly();
-        if (block.number - seedBlock > 256) {
+        // A stale seed, or one published after the stake freeze expired (stakes could move once it was known),
+        // is never consumed: ask for a new one.
+        if (block.number - seedBlock > 256 || block.number >= staking.drawPendingSince() + staking.FREEZE_MAX()) {
+            staking.setDrawPending(false); // re-arms the freeze before a new seed exists
             _requestDraw();
             return;
         }
@@ -250,10 +260,12 @@ contract GraphFund is Ownable2Step, ReentrancyGuard {
         uint256 e = epoch;
         if (e == 0) revert NotStarted();
         if (block.timestamp < epochStart + _params.epochLength) revert TooEarly();
+        uint256 raw = address(this).balance; // ETH that arrived without receive() (forced sends)
+        if (raw > 0) weth.deposit{value: raw}();
         (uint32[] memory br, uint256 nb) = _activeBranches();
         for (uint256 b; b < nb; b++) _finalize(e, br[b]);
         uint256 distributed = _distribute(e);
-        _updateStreaks(br, nb);
+        _updateStreaks(e, br, nb);
         _activatePending();
         epoch = e + 1;
         epochStart = block.timestamp;
@@ -281,12 +293,14 @@ contract GraphFund is Ownable2Step, ReentrancyGuard {
         if (recipient == address(0)) revert ZeroAddress();
         uint256 bond = _params.proposalBond;
         IERC20 t = _bondToken();
+        if (parent == 0) revert BadParent(); // proposals go under a branch, never straight under the root
         id = _create(parent, name, recipient, msg.sender, bond);
         if (bond > 0) t.safeTransferFrom(msg.sender, address(this), bond);
         emit Proposed(id, msg.sender, bond);
     }
 
     function rejectProposal(uint32 id) external onlyOwner {
+        if (drawPending) revert DrawPending();
         if (id >= _nodes.length) revert BadNode();
         Node storage n = _nodes[id];
         if (n.proposer == address(0) || !(n.active || n.pending)) revert BadNode();
@@ -318,6 +332,7 @@ contract GraphFund is Ownable2Step, ReentrancyGuard {
     }
 
     function prune(uint32 id) external {
+        if (drawPending) revert DrawPending();
         if (id >= _nodes.length) revert BadNode();
         Node storage n = _nodes[id];
         if (n.proposer == address(0) || !n.active || n.zeroStreak < _params.pruneAfter) revert NotPrunable();
@@ -555,14 +570,19 @@ contract GraphFund is Ownable2Step, ReentrancyGuard {
         if (valid == 0) return;
         uint256[] memory med = new uint256[](nk);
         uint16[] memory col = new uint16[](valid);
+        bool any;
         for (uint256 c; c < nk; c++) {
             uint256 j;
             for (uint256 v; v < nv; v++) {
                 if (vs[v].length == nk) col[j++] = vs[v][c];
             }
             med[c] = Median.median(col);
+            if (med[c] > 0) any = true;
         }
+        if (!any) return; // every median is 0: keep the current weights
         uint16[] memory w = Median.normalize(med);
+        uint256 cap = _params.maxShiftBps;
+        if (cap < 10_000) w = Median.step(_weights[id], w, cap);
         _weights[id] = w;
         emit WeightsFinalized(e, id, w);
     }
@@ -607,15 +627,17 @@ contract GraphFund is Ownable2Step, ReentrancyGuard {
         }
     }
 
-    function _updateStreaks(uint32[] memory br, uint256 nb) internal {
+    /// @dev A zero-weight epoch only counts toward pruning when the fork had a committee that voted in epoch `e`.
+    function _updateStreaks(uint256 e, uint32[] memory br, uint256 nb) internal {
         for (uint256 b; b < nb; b++) {
             uint32[] storage ks = _kids[br[b]];
             uint16[] storage ws = _weights[br[b]];
+            bool voted = _voters[e][br[b]].length > 0;
             for (uint256 i; i < ks.length; i++) {
                 Node storage c = _nodes[ks[i]];
                 if (c.proposer == address(0)) continue;
                 if (ws[i] == 0) {
-                    if (c.zeroStreak < type(uint8).max) c.zeroStreak++;
+                    if (voted && c.zeroStreak < type(uint8).max) c.zeroStreak++;
                 } else {
                     c.zeroStreak = 0;
                     c.everFunded = true;

@@ -46,4 +46,12 @@ contract MedianHarness {
     function normalize(uint256[] memory raw) external pure returns (uint16[] memory) {
         return Median.normalize(raw);
     }
+
+    function step(uint16[] memory cur, uint16[] memory target, uint256 maxShift)
+        external
+        pure
+        returns (uint16[] memory)
+    {
+        return Median.step(cur, target, maxShift);
+    }
 }

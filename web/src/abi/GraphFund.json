@@ -359,6 +359,11 @@
             "name": "proposalBond",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "maxShiftBps",
+            "type": "uint16",
+            "internalType": "uint16"
           }
         ]
       }
@@ -716,6 +721,11 @@
             "name": "proposalBond",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "maxShiftBps",
+            "type": "uint16",
+            "internalType": "uint16"
           }
         ]
       }
@@ -1193,6 +1203,11 @@
             "name": "proposalBond",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "maxShiftBps",
+            "type": "uint16",
+            "internalType": "uint16"
           }
         ]
       }
@@ -1412,6 +1427,11 @@
   {
     "type": "error",
     "name": "BondSettled",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "DrawPending",
     "inputs": []
   },
   {
